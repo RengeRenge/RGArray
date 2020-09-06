@@ -26,6 +26,8 @@
 
 @property (nonatomic, strong) RGArray <NSString *> *array;
 
+@property (nonatomic, strong) UILabel *checkResultLabel;
+
 @end
 
 @implementation ViewController
@@ -34,6 +36,7 @@
     [super viewDidLoad];
     
     self.array = [RGArray arrayWithObjects:@"1", @"6", @"4", nil];
+    self.array.changeByStep = YES;
     
     [self.array addDelegate:self];
     [self.array setEqualRule:^BOOL(NSString * _Nonnull obj, NSString * _Nonnull other) {
@@ -54,7 +57,7 @@
     
     
     self.random = [UIButton buttonWithType:UIButtonTypeSystem];
-    [self.random setTitle:@"random" forState:UIControlStateNormal];
+    [self.random setTitle:@"sort" forState:UIControlStateNormal];
     
     self.add = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.add setTitle:@"add" forState:UIControlStateNormal];
@@ -68,6 +71,12 @@
     self.autoTest = [UIButton buttonWithType:UIButtonTypeSystem];
     [self.autoTest setTitle:@"auto" forState:UIControlStateNormal];
     
+    self.checkResultLabel = [[UILabel alloc] init];
+    self.checkResultLabel.numberOfLines = 0;
+    self.checkResultLabel.backgroundColor = UIColor.whiteColor;
+    self.checkResultLabel.font = [UIFont systemFontOfSize:12];
+    [self.view addSubview:self.checkResultLabel];
+    
     NSArray <UIButton *> *views = @[self.random, self.add, self.remove, self.set, self.autoTest];
     [views enumerateObjectsUsingBlock:^(UIButton * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         [obj sizeToFit];
@@ -78,7 +87,7 @@
     self.buttonWrapper.spacing = 10;
     [self.view addSubview:self.buttonWrapper];
     
-    [self.random addTarget:self action:@selector(onRandom) forControlEvents:UIControlEventTouchUpInside];
+    [self.random addTarget:self action:@selector(sort) forControlEvents:UIControlEventTouchUpInside];
     [self.set addTarget:self action:@selector(onSet) forControlEvents:UIControlEventTouchUpInside];
     [self.add addTarget:self action:@selector(onAdd) forControlEvents:UIControlEventTouchUpInside];
     [self.remove addTarget:self action:@selector(onRemove) forControlEvents:UIControlEventTouchUpInside];
@@ -100,18 +109,39 @@
         return;
     }
     
+    NSString *oriStr = self.inputView.text;
     [self onRandom];
+    NSString *newStr = self.inputView.text;
     [self onSet];
     
+    self.checkResultLabel.hidden = NO;
     [self.tableView layoutIfNeeded];
+    
+    __block BOOL visisbleCheck = YES;
     [[self.tableView visibleCells] enumerateObjectsUsingBlock:^(__kindof UITableViewCell * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         NSIndexPath *path = [self.tableView indexPathForCell:obj];
         
         NSString *value = self.array[path.row];
-        NSAssert([value isEqualToString:obj.textLabel.text], @"数据没刷新到位");
+        visisbleCheck = [value isEqualToString:obj.textLabel.text];
+        *stop = !visisbleCheck;
+//        NSAssert([value isEqualToString:obj.textLabel.text], @"数据没刷新到位");
     }];
     
-    [self performSelector:@selector(test) withObject:nil afterDelay:1];
+    __block BOOL arrayCheck = YES;
+    NSArray <NSString *> *newArray = [self.inputView.text componentsSeparatedByString:@","];
+    [newArray enumerateObjectsUsingBlock:^(NSString * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+        NSString *value = self.array[idx];
+        arrayCheck = [value isEqualToString:obj];
+        *stop = !arrayCheck;
+    }];
+    
+    NSString *result = (arrayCheck && visisbleCheck) ? @"✅" : @"❌";
+    self.checkResultLabel.text = [NSString stringWithFormat:@"%@\nto:\n%@\nresult:%@", oriStr, newStr, result];
+    if (arrayCheck && visisbleCheck) {
+        [self performSelector:@selector(test) withObject:nil afterDelay:1];
+    } else {
+        NSAssert(NO, @"数据没刷新到位");
+    }
 }
 
 - (void)viewWillLayoutSubviews {
@@ -121,17 +151,23 @@
     self.inputView.frame = CGRectMake(20, CGRectGetMaxY(self.buttonWrapper.frame), bounds.size.width - 40, 40);
     self.inputView.borderStyle = UITextBorderStyleRoundedRect;
     self.tableView.frame = UIEdgeInsetsInsetRect(bounds, UIEdgeInsetsMake(CGRectGetMaxY(self.inputView.frame), 0, 0, 0));
+    
+    self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 64, 0);
+    self.checkResultLabel.frame = CGRectMake(10, bounds.size.height - 64, bounds.size.width - 20, 64);
 }
 
 - (void)onRemove {
+    self.checkResultLabel.hidden = YES;
     [self.array removeObjectsInArray:[self.inputView.text componentsSeparatedByString:@","]];
 }
 
 - (void)onSet {
+    self.checkResultLabel.hidden = YES;
     [self.array setArray:[self.inputView.text componentsSeparatedByString:@","]];
 }
 
 - (void)onAdd {
+    self.checkResultLabel.hidden = YES;
     [self.array addObjectsFromArray:[self.inputView.text componentsSeparatedByString:@","]];
 }
 
@@ -143,6 +179,12 @@
         [array addObject:@(arc4random()%10).stringValue];
     }
     self.inputView.text = [array componentsJoinedByString:@","];
+}
+
+- (void)sort {
+    [self.array sortUsingComparator:^NSComparisonResult(NSString * _Nonnull obj1, NSString * _Nonnull obj2) {
+        return [obj1 compare:obj2];
+    }];
 }
 
 #pragma mark - UITableViewDataSource

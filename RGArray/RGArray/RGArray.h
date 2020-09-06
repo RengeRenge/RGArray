@@ -16,6 +16,8 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, readonly) NSIndexSet *insertions;
 @property (nonatomic, readonly) NSIndexSet *modifications;
 
+/// Whether the step-by-step callback of the array is complete
+@property (nonatomic, readonly) BOOL done;
 
 - (NSArray<NSIndexPath *> *)deletionsInSection:(NSUInteger)section;
 - (NSArray<NSIndexPath *> *)insertionsInSection:(NSUInteger)section;
@@ -59,12 +61,21 @@ NS_ASSUME_NONNULL_BEGIN
 /// 自定义数组元素是否变化的逻辑判断，不为空时，会忽略 RGChangeProtocol
 @property (nonatomic, copy, nullable) BOOL(^modifyRule)(ObjectType old, ObjectType young);
 
+/// change callback will called step-by-step. recommended to set it to yes when the list is not refreshed using "reloadRowsAtIndexPaths" or "reloadItemsAtIndexPaths"
+@property (nonatomic, assign) BOOL changeByStep;
+
 - (void)addDelegate:(id<RGArrayChangeDelegate>)delegate;
 - (void)removeDelegate:(id<RGArrayChangeDelegate>)delegate;
 
 /// 通知代理更新对应的位置
 - (void)sendModificationsAtIndexes:(NSIndexSet *)indexes;
 - (void)sendModificationsWithObject:(ObjectType)anObject;
+
+/// Step by step callback changes
+/// @param range range
+/// @param otherArray otherArray
+/// @param reverseSearch search order.  The equal element will change more reasonably, if the change position of insertion or deletion is closer to the search order.
+- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray reverseSearch:(BOOL)reverseSearch;
 
 #pragma mark - NSMutableArray
 
