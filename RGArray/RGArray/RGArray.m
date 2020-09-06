@@ -385,7 +385,7 @@ typedef enum : NSUInteger {
 
 - (void)replaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray {
     if (self.changeByStep) {
-        [self stepReplaceObjectsInRange:range withObjectsFromArray:otherArray searchReverse:NO];
+        [self stepReplaceObjectsInRange:range withObjectsFromArray:otherArray reverseSearch:NO];
         return;
     }
     if (otherArray.count == 0) {
@@ -476,7 +476,7 @@ typedef enum : NSUInteger {
      ];
 }
 
-- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray searchReverse:(BOOL)searchReverse {
+- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray reverseSearch:(BOOL)reverseSearch {
     if (otherArray.count == 0) {
         NSIndexSet *set = [NSIndexSet indexSetWithIndexesInRange:range];
         [self removeObjectsAtIndexes:set];
@@ -519,7 +519,7 @@ typedef enum : NSUInteger {
             }
         };
         
-        if (searchReverse) {
+        if (reverseSearch) {
             for (NSUInteger mIdx = range.location; mIdx < mCount; mIdx++) {
                 if (mCount - deletes.count == otherArray.count) {
                     break;
@@ -541,7 +541,7 @@ typedef enum : NSUInteger {
     } else if (otherArray.count > range.length) {
         // insert
         NSMutableArray *insetObjs = [NSMutableArray array];
-        NSEnumerationOptions op = searchReverse ? NSEnumerationReverse : NSEnumerationConcurrent;
+        NSEnumerationOptions op = reverseSearch ? NSEnumerationReverse : NSEnumerationConcurrent;
         [otherArray enumerateObjectsWithOptions:op usingBlock:^(id <RGChangeProtocol> _Nonnull nObj, NSUInteger nIdx, BOOL * _Nonnull stop) {
             id findObj = nil;
             for (NSUInteger mIdx = mLoc + inserts.count; mIdx < mCount; mIdx++) {
