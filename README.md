@@ -23,19 +23,64 @@ pod 'RGArray'
   
 - (void)init {
   self.array = [RGArray arrayWithObjects:@"1", @"6", @"4", nil];
-	[self.array addDelegate:self];
+  [self.array addDelegate:self];
 }
 
 #pragma mark - RGArrayChangeDelegate
+
 - (void)changeArray:(nonnull RGArray *)array change:(nonnull RGArrayChange *)change {
-    NSLog(@"%@", change);
+  NSLog(@"%@", change);
+  [self.tableView beginUpdates];
+  [self.tableView deleteRowsAtIndexPaths:change.deletionIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+  [self.tableView insertRowsAtIndexPaths:change.insertionsIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+  [self.tableView reloadRowsAtIndexPaths:change.modificationIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
+  [self.tableView endUpdates];
+}
+```
+
+#### callback step-by-step
+
+Sometimes, we cannot use "reloadRowsAtIndexPaths" to refresh the list, because when the list has a selected state, the selected state will be lost after refreshing.
+
+At this time, you need to take out a specific cell for modification.
+
+```objective-c
+self.array.changeByStep = YES;
+```
+
+```objective-c
+#pragma mark - RGArrayChangeDelegate
+
+- (void)changeArray:(RGArray *)array change:(RGArrayChange *)change {
+  NSLog(@"change: %@", change);
+  if (change.deletions.count || change.insertions.count) {
     [self.tableView beginUpdates];
     [self.tableView deleteRowsAtIndexPaths:change.deletionIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
     [self.tableView insertRowsAtIndexPaths:change.insertionsIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
-    [self.tableView reloadRowsAtIndexPaths:change.modificationIndexPaths withRowAnimation:UITableViewRowAnimationAutomatic];
     [self.tableView endUpdates];
+  } else {
+    [change.modificationIndexPaths enumerateObjectsUsingBlock:^(NSIndexPath * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+      UITableViewCell *cell = [self.tableView cellForRowAtIndexPath:obj];
+      if (cell) {
+        [self configCell:cell withObj:array[obj.row]];
+      }
+    }];
+  }
+}
+
+- (UITableViewCell *)tableView:(UITableView *)tableView cellForRowAtIndexPath:(NSIndexPath *)indexPath {
+  UITableViewCell *cell = [tableView dequeueReusableCellWithIdentifier:@"TableViewCellID" forIndexPath:indexPath];
+  NSString *obj = self.array[indexPath.row];
+  [self configCell:cell withObj:obj];
+  return cell;
+}
+
+- (void)configCell:(UITableViewCell *)cell withObj:(NSString *)obj {
+  cell.textLabel.text = obj;
 }
 ```
+
+⚠️ In this case, if you don’t use stepwise Callback, it will cause some exceptions in the list.
 
 ### Set Compare Rule For elements
 
