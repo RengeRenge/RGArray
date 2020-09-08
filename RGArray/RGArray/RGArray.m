@@ -541,10 +541,10 @@ typedef enum : NSUInteger {
     } else if (otherArray.count > range.length) {
         // insert
         NSMutableArray *insetObjs = [NSMutableArray array];
-        NSEnumerationOptions op = reverseSearch ? NSEnumerationReverse : NSEnumerationConcurrent;
-        [otherArray enumerateObjectsWithOptions:op usingBlock:^(id <RGChangeProtocol> _Nonnull nObj, NSUInteger nIdx, BOOL * _Nonnull stop) {
+        void(^pickInserts)(NSUInteger nIdx) = ^(NSUInteger nIdx) {
+            id <RGChangeProtocol> nObj = otherArray[nIdx];
             id findObj = nil;
-            for (NSUInteger mIdx = mLoc + inserts.count; mIdx < mCount; mIdx++) {
+            for (NSUInteger mIdx = mLoc; mIdx < mCount; mIdx++) {
                 if ([finds containsIndex:mIdx]) {
                     continue;
                 }
@@ -559,8 +559,22 @@ typedef enum : NSUInteger {
                 [insetObjs addObject:nObj];
                 [inserts addIndex:mLoc + nIdx];
             }
-            *stop = (mCount + inserts.count == otherArray.count);
-        }];
+        };
+        if (reverseSearch) {
+            for (NSUInteger nIdx = otherArray.count - 1; nIdx >= 0 && nIdx < otherArray.count; nIdx--) {
+                if (mCount + inserts.count == otherArray.count) {
+                    break;
+                }
+                pickInserts(nIdx);
+            }
+        } else {
+            for (NSUInteger nIdx = 0; nIdx < otherArray.count; nIdx++) {
+                if (mCount + inserts.count == otherArray.count) {
+                    break;
+                }
+                pickInserts(nIdx);
+            }
+        }
         if (inserts.count) {
 //            NSLog(@"inserts: -->>>>\ntemp:%@\ninsetObjs:%@\ninserts:%@\notherArray:%@\n<<<<<--", temp, insetObjs, inserts, otherArray);
             [temp insertObjects:insetObjs atIndexes:inserts];
