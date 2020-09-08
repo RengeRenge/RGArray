@@ -267,6 +267,28 @@ typedef enum : NSUInteger {
     return _mArray[index];
 }
 
++ (instancetype)arrayWithArray:(NSArray *)array {
+    RGArray *obj = [super arrayWithArray:array];
+    if ([array isKindOfClass:RGArray.class]) {
+        RGArray *old = (RGArray *)array;
+        obj.equalRule = old.equalRule;
+        obj.modifyRule = old.modifyRule;
+        obj.changeByStep = old.changeByStep;
+        obj.headBetter = old.headBetter;
+    }
+    return obj;
+}
+
+- (id)copy {
+    RGArray *obj = [self.class arrayWithArray:self];
+    return obj;
+}
+
+- (id)mutableCopy {
+    RGArray *obj = [self.class arrayWithArray:self];
+    return obj;
+}
+
 #pragma mark - NSMutableArray
 
 - (void)addObject:(id)anObject {
@@ -385,7 +407,7 @@ typedef enum : NSUInteger {
 
 - (void)replaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray {
     if (self.changeByStep) {
-        [self stepReplaceObjectsInRange:range withObjectsFromArray:otherArray reverseSearch:NO];
+        [self stepReplaceObjectsInRange:range withObjectsFromArray:otherArray];
         return;
     }
     if (otherArray.count == 0) {
@@ -476,7 +498,7 @@ typedef enum : NSUInteger {
      ];
 }
 
-- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray reverseSearch:(BOOL)reverseSearch {
+- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray {
     if (otherArray.count == 0) {
         NSIndexSet *set = [NSIndexSet indexSetWithIndexesInRange:range];
         [self removeObjectsAtIndexes:set];
@@ -488,11 +510,12 @@ typedef enum : NSUInteger {
         return;
     }
     
+    BOOL headBetter = self.headBetter;
     NSMutableIndexSet *deletes = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *inserts = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *reloads = [NSMutableIndexSet indexSet];
     
-    NSMutableArray *temp = [NSMutableArray arrayWithArray:_mArray];
+    NSMutableArray *mArray = [NSMutableArray arrayWithArray:_mArray];
     NSMutableIndexSet *finds = [NSMutableIndexSet indexSet];
     
     NSUInteger mCount = range.length + range.location;
@@ -501,7 +524,7 @@ typedef enum : NSUInteger {
     if (otherArray.count < range.length) {
         // delete
         void(^pickDeletes)(NSUInteger mIdx) = ^(NSUInteger mIdx) {
-            id <RGChangeProtocol> mObj = temp[mIdx];
+            id <RGChangeProtocol> mObj = mArray[mIdx];
             id findObj = nil;
             for (NSUInteger nIdx = 0; nIdx < otherArray.count; nIdx++) {
                 if ([finds containsIndex:nIdx]) {
@@ -519,15 +542,15 @@ typedef enum : NSUInteger {
             }
         };
         
-        if (reverseSearch) {
-            for (NSUInteger mIdx = range.location; mIdx < mCount; mIdx++) {
+        if (headBetter) {
+            for (NSUInteger mIdx = mCount - 1; mIdx >= mLoc && mIdx < mCount; mIdx--) {
                 if (mCount - deletes.count == otherArray.count) {
                     break;
                 }
                 pickDeletes(mIdx);
             }
         } else {
-            for (NSUInteger mIdx = mCount - 1; mIdx >= mLoc && mIdx < mCount; mIdx--) {
+            for (NSUInteger mIdx = range.location; mIdx < mCount; mIdx++) {
                 if (mCount - deletes.count == otherArray.count) {
                     break;
                 }
@@ -536,7 +559,7 @@ typedef enum : NSUInteger {
         }
         
         if (deletes.count) {
-            [temp removeObjectsAtIndexes:deletes];
+            [mArray removeObjectsAtIndexes:deletes];
         }
     } else if (otherArray.count > range.length) {
         // insert
@@ -548,7 +571,7 @@ typedef enum : NSUInteger {
                 if ([finds containsIndex:mIdx]) {
                     continue;
                 }
-                id mObj = temp[mIdx];
+                id mObj = mArray[mIdx];
                 if ([self _isRGEqualOfObj:nObj other:mObj]) {
                     findObj = mObj;
                     [finds addIndex:mIdx];
@@ -560,7 +583,7 @@ typedef enum : NSUInteger {
                 [inserts addIndex:mLoc + nIdx];
             }
         };
-        if (reverseSearch) {
+        if (headBetter) {
             for (NSUInteger nIdx = otherArray.count - 1; nIdx >= 0 && nIdx < otherArray.count; nIdx--) {
                 if (mCount + inserts.count == otherArray.count) {
                     break;
@@ -577,7 +600,7 @@ typedef enum : NSUInteger {
         }
         if (inserts.count) {
 //            NSLog(@"inserts: -->>>>\ntemp:%@\ninsetObjs:%@\ninserts:%@\notherArray:%@\n<<<<<--", temp, insetObjs, inserts, otherArray);
-            [temp insertObjects:insetObjs atIndexes:inserts];
+            [mArray insertObjects:insetObjs atIndexes:inserts];
         }
     }
     
@@ -585,7 +608,7 @@ typedef enum : NSUInteger {
     NSMutableArray *reloadObjs = [NSMutableArray array];
     for (NSUInteger nIdx = 0; nIdx < otherArray.count; nIdx++) {
         NSUInteger mIdx = mLoc + nIdx;
-        id <RGChangeProtocol> mObj = temp[mIdx];
+        id <RGChangeProtocol> mObj = mArray[mIdx];
         id <RGChangeProtocol> nObj = otherArray[nIdx];
         if ([self _isRGEqualOfObj:nObj other:mObj]) {
             if ([self _hasModificationOfObj:nObj old:mObj]) {
@@ -599,18 +622,18 @@ typedef enum : NSUInteger {
     }
     
     if (deletes.count) {
-        _mArray = temp;
-        temp = [NSMutableArray arrayWithArray:_mArray];
+        _mArray = mArray;
+        mArray = [NSMutableArray arrayWithArray:_mArray];
         [self __callbackWithIndexes:deletes type:RGArrayChangeTypeDelete done:reloads.count <= 0];
     } else if (inserts.count) {
-        _mArray = temp;
-        temp = [NSMutableArray arrayWithArray:_mArray];
+        _mArray = mArray;
+        mArray = [NSMutableArray arrayWithArray:_mArray];
         [self __callbackWithIndexes:inserts type:RGArrayChangeTypeNew done:reloads.count <= 0];
     }
     
     if (reloads.count) {
-        [temp replaceObjectsAtIndexes:reloads withObjects:reloadObjs];
-        _mArray = temp;
+        [mArray replaceObjectsAtIndexes:reloads withObjects:reloadObjs];
+        _mArray = mArray;
         [self __callbackWithIndexes:reloads type:RGArrayChangeTypeUpdate done:YES];
     }
 }

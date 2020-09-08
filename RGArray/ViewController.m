@@ -147,13 +147,14 @@
 - (void)viewWillLayoutSubviews {
     [super viewWillLayoutSubviews];
     CGRect bounds = self.view.bounds;
-    self.buttonWrapper.frame = CGRectMake(10, 10, bounds.size.width-20, 40);
+    UIEdgeInsets edge = self.view.safeAreaInsets;
+    self.buttonWrapper.frame = CGRectMake(10, edge.top, bounds.size.width-20, 40);
     self.inputView.frame = CGRectMake(20, CGRectGetMaxY(self.buttonWrapper.frame), bounds.size.width - 40, 40);
     self.inputView.borderStyle = UITextBorderStyleRoundedRect;
     self.tableView.frame = UIEdgeInsetsInsetRect(bounds, UIEdgeInsetsMake(CGRectGetMaxY(self.inputView.frame), 0, 0, 0));
     
-    self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 64, 0);
-    self.checkResultLabel.frame = CGRectMake(10, bounds.size.height - 64, bounds.size.width - 20, 64);
+    self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 64 + edge.bottom, 0);
+    self.checkResultLabel.frame = CGRectMake(10, bounds.size.height - edge.bottom - 64, bounds.size.width - 20, 64);
 }
 
 - (void)onRemove {

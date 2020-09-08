@@ -64,6 +64,9 @@ NS_ASSUME_NONNULL_BEGIN
 /// change callback will called step-by-step. recommended to set it to yes when the list is not refreshed using "reloadRowsAtIndexPaths" or "reloadItemsAtIndexPaths"
 @property (nonatomic, assign) BOOL changeByStep;
 
+/// the equal element will change more reasonably, if the change position of insertion or deletion is closer to the head
+@property (nonatomic, assign) BOOL headBetter;
+
 - (void)addDelegate:(id<RGArrayChangeDelegate>)delegate;
 - (void)removeDelegate:(id<RGArrayChangeDelegate>)delegate;
 
@@ -74,8 +77,7 @@ NS_ASSUME_NONNULL_BEGIN
 /// Step by step callback changes
 /// @param range range
 /// @param otherArray otherArray
-/// @param reverseSearch search order.  The equal element will change more reasonably, if the change position of insertion or deletion is closer to the search order.
-- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray reverseSearch:(BOOL)reverseSearch;
+- (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray;
 
 #pragma mark - NSMutableArray
 
