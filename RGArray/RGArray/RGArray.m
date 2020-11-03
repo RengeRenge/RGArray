@@ -8,6 +8,7 @@
 
 #import "RGArray.h"
 #import <UIKit/UIKit.h>
+#import <objc/runtime.h>
 
 typedef enum : NSUInteger {
     RGArrayChangeTypeNew,
@@ -217,6 +218,9 @@ typedef enum : NSUInteger {
 }
 
 - (BOOL)_hasModificationOfObj:(id<RGChangeProtocol>)obj old:(id<RGChangeProtocol>)old {
+    if (([obj isKindOfClass:NSObject.class] && ((NSObject *)obj).rg_needModifyChange)) {
+        return YES;
+    }
     if (self.modifyRule) {
         return self.modifyRule(old, obj);
     }
@@ -936,3 +940,15 @@ typedef enum : NSUInteger {
 
 @end
 
+
+@implementation NSObject (RGArrayModifyTag)
+
+- (void)setRg_needModifyChange:(BOOL)rg_needModifyChange {
+    objc_setAssociatedObject(self, "rg_needModifyChange_key", @(rg_needModifyChange), OBJC_ASSOCIATION_ASSIGN);
+}
+
+- (BOOL)rg_needModifyChange {
+    return [objc_getAssociatedObject(self, "rg_needModifyChange_key") boolValue];
+}
+
+@end

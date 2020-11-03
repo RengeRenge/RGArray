@@ -142,4 +142,11 @@ NS_ASSUME_NONNULL_BEGIN
 
 @end
 
+
+@interface NSObject (RGArrayModifyTag)
+
+@property (nonatomic, assign) BOOL rg_needModifyChange;
+
+@end
+
 NS_ASSUME_NONNULL_END
