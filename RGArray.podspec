@@ -16,7 +16,7 @@ Pod::Spec.new do |s|
   #
 
   s.name         = "RGArray"
-  s.version      = "1.1.0"
+  s.version      = "1.2.0"
   s.summary      = "RGArray, listen the change of internal elements (insert, delete, replace, sort)"
 
   # This description is used to generate tags and improve search results.
@@ -116,7 +116,7 @@ Pod::Spec.new do |s|
   #
 
   #. s.framework  = "UIKit"
-  s.frameworks = "UIKit"
+  s.frameworks = "UIKit", "objc"
 
   # s.library   = "iconv"
   # s.libraries = "iconv", "xml2"
