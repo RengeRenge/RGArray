@@ -79,6 +79,8 @@ NS_ASSUME_NONNULL_BEGIN
 /// @param otherArray otherArray
 - (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray;
 
++ (void)enumerateNumberWithBegin:(NSUInteger)begin length:(NSUInteger)length reverse:(BOOL)reverse usingBlock:(void (^)(NSUInteger idx, BOOL * _Nonnull stop))block;
+
 #pragma mark - NSMutableArray
 
 - (void)addObject:(ObjectType)anObject;

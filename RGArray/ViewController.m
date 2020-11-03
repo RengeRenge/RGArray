@@ -36,6 +36,7 @@
     [super viewDidLoad];
     
     self.array = [RGArray arrayWithObjects:@"1", @"6", @"4", nil];
+    self.array.headBetter = NO;
     self.array.changeByStep = YES;
     
     [self.array addDelegate:self];
@@ -154,7 +155,7 @@
     self.tableView.frame = UIEdgeInsetsInsetRect(bounds, UIEdgeInsetsMake(CGRectGetMaxY(self.inputView.frame), 0, 0, 0));
     
     self.tableView.contentInset = UIEdgeInsetsMake(0, 0, 64 + edge.bottom, 0);
-    self.checkResultLabel.frame = CGRectMake(10, bounds.size.height - edge.bottom - 64, bounds.size.width - 20, 64);
+    self.checkResultLabel.frame = CGRectMake(10, bounds.size.height - edge.bottom - 120, bounds.size.width - 20, 120);
 }
 
 - (void)onRemove {
