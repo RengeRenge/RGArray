@@ -141,6 +141,8 @@ typedef enum : NSUInteger {
 @property (nonatomic, strong) NSMutableArray *mArray;
 @property (nonatomic, strong) NSPointerArray *delegates;
 
+@property (nonatomic, strong) NSMapTable *modifyRuleTable;
+
 @end
 
 @implementation RGArray
@@ -148,10 +150,19 @@ typedef enum : NSUInteger {
 #pragma mark - RGFunction
 
 - (void)addDelegate:(id<RGArrayChangeDelegate>)delegate {
+    [self addDelegate:delegate modifyRule:nil];
+}
+
+- (void)addDelegate:(id<RGArrayChangeDelegate>)delegate modifyRule:(BOOL (^)(id _Nonnull, id _Nonnull))modifyRule {
     if (delegate) {
         void(^mainBlock)(void) = ^{
             if (![[self.delegates allObjects] containsObject:delegate]) {
                 [self.delegates addPointer:(__bridge void * _Nullable)(delegate)];
+            }
+            if (delegate && modifyRule) {
+                [self.modifyRuleTable setObject:modifyRule forKey:delegate];
+            } else {
+                [self.modifyRuleTable removeObjectForKey:delegate];
             }
         };
         if ([NSThread isMainThread]) {
@@ -187,6 +198,13 @@ typedef enum : NSUInteger {
     return _delegates;
 }
 
+- (NSMapTable *)modifyRuleTable {
+    if (!_modifyRuleTable) {
+        _modifyRuleTable = [NSMapTable mapTableWithKeyOptions:NSPointerFunctionsWeakMemory valueOptions:NSPointerFunctionsCopyIn];
+    }
+    return _modifyRuleTable;
+}
+
 - (void)sendModificationsAtIndexes:(NSIndexSet *)indexes {
     [self __callbackWithIndexes:indexes type:RGArrayChangeTypeUpdate];
 }
@@ -217,9 +235,14 @@ typedef enum : NSUInteger {
     return NO;
 }
 
-- (BOOL)_hasModificationOfObj:(id<RGChangeProtocol>)obj old:(id<RGChangeProtocol>)old {
+- (BOOL)_hasModificationOfObj:(id<RGChangeProtocol>)obj
+                          old:(id<RGChangeProtocol>)old
+                  sepcialRule:(BOOL(^)(id old, id young))sepcialRule {
     if (([obj isKindOfClass:NSObject.class] && ((NSObject *)obj).rg_needModifyChange)) {
         return YES;
+    }
+    if (sepcialRule) {
+        return sepcialRule(old, obj);
     }
     if (self.modifyRule) {
         return self.modifyRule(old, obj);
@@ -250,7 +273,51 @@ typedef enum : NSUInteger {
     }];
 }
 
-- (void)__callbackWithIndexes:(NSArray <NSIndexSet *> *)indexes types:(NSArray <NSNumber *> *)types done:(BOOL)done {
+- (void)__callbackWithIndexes:(NSArray <NSIndexSet *> *)indexes
+                        types:(NSArray <NSNumber *> *)types
+                specialModify:(NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *)specialModify
+                         done:(BOOL)done {
+    if (specialModify.keyEnumerator.allObjects.count) {
+        NSUInteger modifyIndex = [types indexOfObject:@(RGArrayChangeTypeUpdate)];
+        NSIndexSet *modifys = nil;
+        if (modifyIndex != NSNotFound) {
+            modifys = indexes[modifyIndex];
+            NSMutableArray <NSIndexSet *> *indexesMutable = indexes.mutableCopy;
+            
+            [specialModify.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id<RGArrayChangeDelegate>  _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
+                
+                NSMutableIndexSet *sepcialModifys = [specialModify objectForKey:obj];
+                [sepcialModifys addIndexes:modifys];
+                
+                indexesMutable[modifyIndex] = sepcialModifys;
+                
+                [self __callbackWithIndexes:indexesMutable types:types delegate:obj done:done];
+            }];
+        }
+    }
+    
+    if (![self __needCallbackWithIndexes:indexes]) {
+        return;
+    }
+    RGArrayChange *change = [[RGArrayChange alloc] initWithIndexSets:indexes types:types done:done];
+    
+    [self __enumerateDelegate:^(id<RGArrayChangeDelegate> obj) {
+        [obj changeArray:self change:change];
+    } exclude:specialModify.keyEnumerator.allObjects];
+}
+
+- (void)__callbackWithIndexes:(NSArray <NSIndexSet *> *)indexes
+                        types:(NSArray <NSNumber *> *)types
+                     delegate:(id<RGArrayChangeDelegate>)delegate
+                         done:(BOOL)done {
+    if (![self __needCallbackWithIndexes:indexes]) {
+        return;
+    }
+    RGArrayChange *change = [[RGArrayChange alloc] initWithIndexSets:indexes types:types done:done];
+    [delegate changeArray:self change:change];
+}
+
+- (BOOL)__needCallbackWithIndexes:(NSArray <NSIndexSet *> *)indexes {
     __block BOOL hasCount = NO;
     [indexes enumerateObjectsUsingBlock:^(NSIndexSet * _Nonnull obj, NSUInteger idx, BOOL * _Nonnull stop) {
         if (obj.count > 0) {
@@ -258,28 +325,46 @@ typedef enum : NSUInteger {
             *stop = YES;
         }
     }];
-    if (!hasCount) {
-        return;
-    }
-    
-    RGArrayChange *change = [[RGArrayChange alloc] initWithIndexSets:indexes types:types done:done];
-    
-    [self __enumerateDelegate:^(id<RGArrayChangeDelegate> obj) {
-        [obj changeArray:self change:change];
-    }];
+    return hasCount;
 }
 
 - (void)__enumerateDelegate:(void (NS_NOESCAPE ^)(id <RGArrayChangeDelegate> obj))block {
+    [self __enumerateDelegate:block exclude:nil];
+}
+
+- (void)__enumerateDelegate:(void (NS_NOESCAPE ^)(id <RGArrayChangeDelegate> obj))block exclude:(NSArray *)exclude {
     NSArray <id<RGArrayChangeDelegate>> *delegates = [self.delegates allObjects];
     for (int i = 0; i < delegates.count; i++) {
         id <RGArrayChangeDelegate> delegate = delegates[i];
+        if ([exclude containsObject:delegate]) {
+            continue;
+        }
         if (block) {
             block(delegate);
         }
     }
 }
 
+- (NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *)__specialReloadMap {
+    NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *specialReloadMap = [NSMapTable strongToStrongObjectsMapTable];
+    [self.modifyRuleTable.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id  _Nonnull delegate, NSUInteger idx, BOOL * _Nonnull stop) {
+        [specialReloadMap setObject:[NSMutableIndexSet indexSet] forKey:delegate];
+    }];
+    return specialReloadMap;
+}
+
 #pragma mark - Array
+
++ (instancetype)new {
+    return [[self alloc] init];
+}
+
+- (instancetype)init {
+    if (self = [super init]) {
+        _mArray = [NSMutableArray arrayWithCapacity:0];
+    }
+    return self;
+}
 
 - (instancetype)initWithCapacity:(NSUInteger)numItems {
     if (self = [super init]) {
@@ -478,6 +563,7 @@ typedef enum : NSUInteger {
     NSMutableIndexSet *deletes = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *inserts = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *reloads = [NSMutableIndexSet indexSet];
+    NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *specialReloadMap = [self __specialReloadMap];
     
     NSMutableArray *mArray = [NSMutableArray arrayWithArray:_mArray];
     
@@ -499,9 +585,14 @@ typedef enum : NSUInteger {
                 id <RGChangeProtocol> mObj = mArray[mIdx];
                 
                 if ([self _isRGEqualOfObj:mObj other:oObj]) {
-                    if ([self _hasModificationOfObj:oObj old:mObj]) {
+                    if ([self _hasModificationOfObj:oObj old:mObj sepcialRule:nil]) {
                         [reloads addIndex:mIdx];
                     }
+                    [self.modifyRuleTable.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id  _Nonnull delegate, NSUInteger idx, BOOL * _Nonnull stop) {
+                        if ([self _hasModificationOfObj:oObj old:mObj sepcialRule:[self.modifyRuleTable objectForKey:delegate]]) {
+                            [[specialReloadMap objectForKey:delegate] addIndex:mIdx];
+                        }
+                    }];
                 } else {
                     if (offsetCount == inserts.count) {
                         [reloads addIndex:mIdx];
@@ -521,10 +612,15 @@ typedef enum : NSUInteger {
                 id <RGChangeProtocol> mObj = mArray[mIdx];
                 id <RGChangeProtocol> oObj = otherArray[oIdx];
                 if ([self _isRGEqualOfObj:mObj other:oObj]) {
-                    if ([self _hasModificationOfObj:oObj old:mObj]) {
+                    reverse ? oIdx-- : oIdx++;
+                    if ([self _hasModificationOfObj:oObj old:mObj sepcialRule:nil]) {
                         [reloads addIndex:mIdx];
                     }
-                    reverse ? oIdx-- : oIdx++;
+                    [self.modifyRuleTable.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id  _Nonnull delegate, NSUInteger idx, BOOL * _Nonnull stop) {
+                        if ([self _hasModificationOfObj:oObj old:mObj sepcialRule:[self.modifyRuleTable objectForKey:delegate]]) {
+                            [[specialReloadMap objectForKey:delegate] addIndex:mIdx];
+                        }
+                    }];
                 } else {
                     if (-offsetCount == deletes.count) {
                         [reloads addIndex:mIdx];
@@ -560,6 +656,7 @@ typedef enum : NSUInteger {
                               @(RGArrayChangeTypeDelete),
                               @(RGArrayChangeTypeNew),
                               @(RGArrayChangeTypeUpdate)]
+                  specialModify:specialReloadMap
                            done:YES
      ];
 }
@@ -580,6 +677,7 @@ typedef enum : NSUInteger {
     NSMutableIndexSet *deletes = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *inserts = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *reloads = [NSMutableIndexSet indexSet];
+    NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *specialReloadMap = [self __specialReloadMap];
     
     NSMutableArray *mArray = [NSMutableArray arrayWithArray:_mArray];
     NSMutableArray *mArrayDeletes = nil;
@@ -654,10 +752,15 @@ typedef enum : NSUInteger {
         id <RGChangeProtocol> mObj = mArray[mIdx];
         id <RGChangeProtocol> nObj = otherArray[nIdx];
         if ([self _isRGEqualOfObj:nObj other:mObj]) {
-            if ([self _hasModificationOfObj:nObj old:mObj]) {
+            if ([self _hasModificationOfObj:nObj old:mObj sepcialRule:nil]) {
                 [reloads addIndex:mIdx];
                 [reloadObjs addObject:nObj];
             }
+            [self.modifyRuleTable.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id  _Nonnull delegate, NSUInteger idx, BOOL * _Nonnull stop) {
+                if ([self _hasModificationOfObj:nObj old:mObj sepcialRule:[self.modifyRuleTable objectForKey:delegate]]) {
+                    [[specialReloadMap objectForKey:delegate] addIndex:mIdx];
+                }
+            }];
         } else {
             [reloads addIndex:mIdx];
             [reloadObjs addObject:nObj];
@@ -702,6 +805,7 @@ typedef enum : NSUInteger {
     NSMutableIndexSet *deletes = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *inserts = [NSMutableIndexSet indexSet];
     NSMutableIndexSet *reloads = [NSMutableIndexSet indexSet];
+    NSMapTable <id <RGArrayChangeDelegate>, NSMutableIndexSet *> *specialReloadMap = [self __specialReloadMap];
     
     NSMutableArray *temp = [NSMutableArray arrayWithArray:_mArray];
     
@@ -786,9 +890,14 @@ typedef enum : NSUInteger {
         id <RGChangeProtocol> nObj = otherArray[nIdx];
         if (![reloads containsIndex:mIdx]) {
             if ([self _isRGEqualOfObj:nObj other:mObj]) {
-                if ([self _hasModificationOfObj:nObj old:mObj]) {
+                if ([self _hasModificationOfObj:nObj old:mObj sepcialRule:nil]) {
                     [reloads addIndex:mIdx];
                 }
+                [self.modifyRuleTable.keyEnumerator.allObjects enumerateObjectsUsingBlock:^(id  _Nonnull delegate, NSUInteger idx, BOOL * _Nonnull stop) {
+                    if ([self _hasModificationOfObj:nObj old:mObj sepcialRule:[self.modifyRuleTable objectForKey:delegate]]) {
+                        [[specialReloadMap objectForKey:delegate] addIndex:mIdx];
+                    }
+                }];
             } else {
                 [reloads addIndex:mIdx];
             }
@@ -826,6 +935,7 @@ typedef enum : NSUInteger {
                               @(RGArrayChangeTypeDelete),
                               @(RGArrayChangeTypeNew),
                               @(RGArrayChangeTypeUpdate)]
+                  specialModify:specialReloadMap
                            done:YES];
 }
 

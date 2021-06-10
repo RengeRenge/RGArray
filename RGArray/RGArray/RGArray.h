@@ -68,6 +68,9 @@ NS_ASSUME_NONNULL_BEGIN
 @property (nonatomic, assign) BOOL headBetter;
 
 - (void)addDelegate:(id<RGArrayChangeDelegate>)delegate;
+
+- (void)addDelegate:(id<RGArrayChangeDelegate>)delegate modifyRule:(BOOL(^__nullable)(ObjectType old, ObjectType young))modifyRule;
+
 - (void)removeDelegate:(id<RGArrayChangeDelegate>)delegate;
 
 /// 通知代理更新对应的位置
@@ -80,6 +83,9 @@ NS_ASSUME_NONNULL_BEGIN
 - (void)stepReplaceObjectsInRange:(NSRange)range withObjectsFromArray:(nonnull NSArray *)otherArray;
 
 + (void)enumerateNumberWithBegin:(NSUInteger)begin length:(NSUInteger)length reverse:(BOOL)reverse usingBlock:(void (^)(NSUInteger idx, BOOL * _Nonnull stop))block;
+
++ (instancetype)new;
+- (instancetype)init;
 
 #pragma mark - NSMutableArray
 
@@ -122,6 +128,7 @@ NS_ASSUME_NONNULL_BEGIN
 - (RGArray <ObjectType> *)objectsAtIndexes:(NSIndexSet *)indexes;
 
 - (ObjectType)objectAtIndexedSubscript:(NSUInteger)idx API_AVAILABLE(macos(10.8), ios(6.0), watchos(2.0), tvos(9.0));
+- (ObjectType)objectAtIndex:(NSUInteger)index;
 
 - (void)enumerateObjectsUsingBlock:(void (NS_NOESCAPE ^)(ObjectType obj, NSUInteger idx, BOOL *stop))block API_AVAILABLE(macos(10.6), ios(4.0), watchos(2.0), tvos(9.0));
 - (void)enumerateObjectsWithOptions:(NSEnumerationOptions)opts usingBlock:(void (NS_NOESCAPE ^)(ObjectType obj, NSUInteger idx, BOOL *stop))block API_AVAILABLE(macos(10.6), ios(4.0), watchos(2.0), tvos(9.0));
